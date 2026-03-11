@@ -90,23 +90,48 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def load_tracks_from_csv(csv_path: str) -> list[dict]:
-    """Charge les pistes depuis un fichier CSV existant."""
+    """Charge les pistes depuis un fichier CSV existant (supporte plusieurs formats)."""
     tracks = []
-    with open(csv_path, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            # Supporte les colonnes : title/artist ou Track Name/Artist Name
-            title = row.get("title") or row.get("Track Name") or row.get("Song Name") or ""
-            artist = row.get("artist") or row.get("Artist Name") or row.get("Artist Name(s)") or ""
-            album = row.get("album") or row.get("Album Name") or ""
-            duration = row.get("duration") or row.get("Duration (ms)") or "0"
-            if title.strip():
-                tracks.append({
-                    "title": title.strip(),
-                    "artist": artist.strip(),
-                    "album": album.strip(),
-                    "duration": duration,
-                })
+    # Essayer utf-8 d'abord, puis utf-8-sig (BOM), puis latin-1
+    for encoding in ("utf-8-sig", "utf-8", "latin-1"):
+        try:
+            with open(csv_path, newline="", encoding=encoding) as f:
+                content = f.read()
+            break
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+    else:
+        raise RuntimeError(f"Impossible de lire le CSV avec un encodage supporté.")
+
+    reader = csv.DictReader(content.splitlines())
+    columns = reader.fieldnames or []
+    print(f"  Colonnes détectées : {columns}")
+
+    for row in reader:
+        # Format Chosic FR : Chanson, Artiste, Album
+        # Format Chosic EN : Track Name, Artist Name, Album Name
+        # Format interne   : title, artist, album
+        title = (
+            row.get("Chanson") or row.get("title") or row.get("Track Name")
+            or row.get("Song Name") or ""
+        )
+        artist = (
+            row.get("Artiste") or row.get("artist") or row.get("Artist Name")
+            or row.get("Artist Name(s)") or ""
+        )
+        album = (
+            row.get("Album") or row.get("album") or row.get("Album Name") or ""
+        )
+        duration = (
+            row.get("Durée") or row.get("duration") or row.get("Duration (ms)") or "0"
+        )
+        if title.strip():
+            tracks.append({
+                "title": title.strip(),
+                "artist": artist.strip(),
+                "album": album.strip(),
+                "duration": duration,
+            })
     return tracks
 
 

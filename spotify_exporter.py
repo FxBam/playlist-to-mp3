@@ -29,16 +29,38 @@ def _extract_playlist_id(url: str) -> str:
 
 def _get_anonymous_token(playlist_id: str) -> str:
     """Obtient un token Spotify anonyme via la page embed (pas de clé API)."""
-    embed_url = f"https://open.spotify.com/embed/playlist/{playlist_id}"
-    resp = requests.get(embed_url, headers={"User-Agent": _USER_AGENT}, timeout=15)
-    resp.raise_for_status()
+    session = requests.Session()
+    session.headers.update({"User-Agent": _USER_AGENT})
 
-    match = re.search(r'"accessToken":"([^"]+)"', resp.text)
-    if not match:
-        raise RuntimeError(
-            "Impossible d'extraire le token depuis la page embed Spotify."
+    # Méthode 1 : page embed
+    try:
+        embed_url = f"https://open.spotify.com/embed/playlist/{playlist_id}"
+        resp = session.get(embed_url, timeout=15)
+        resp.raise_for_status()
+        match = re.search(r'"accessToken":"([^"]+)"', resp.text)
+        if match:
+            return match.group(1)
+    except requests.RequestException:
+        pass
+
+    # Méthode 2 : endpoint get_access_token avec cookies de session
+    try:
+        session.get("https://open.spotify.com/", timeout=10)
+        resp = session.get(
+            "https://open.spotify.com/get_access_token?reason=transport&productType=web_player",
+            timeout=10,
         )
-    return match.group(1)
+        resp.raise_for_status()
+        token = resp.json().get("accessToken")
+        if token:
+            return token
+    except requests.RequestException:
+        pass
+
+    raise RuntimeError(
+        "Impossible d'obtenir un token Spotify anonyme. "
+        "Utilisez --from-csv avec un CSV exporté depuis https://www.chosic.com/spotify-playlist-exporter/"
+    )
 
 
 class SpotifyExporter:
@@ -73,7 +95,8 @@ class SpotifyExporter:
             for attempt in range(5):
                 resp = requests.get(url, headers=self._headers, params=params, timeout=15)
                 if resp.status_code == 429:
-                    wait = int(resp.headers.get("Retry-After", 2 ** attempt))
+                    raw_wait = resp.headers.get("Retry-After", str(2 ** attempt))
+                    wait = min(int(raw_wait), 30)
                     print(f"  ⏳ Rate limit Spotify, attente {wait}s…")
                     time.sleep(wait)
                     continue
