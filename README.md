@@ -1,91 +1,133 @@
 # 🎵 playlist-to-mp3
 
-Convertit une playlist Spotify en fichiers MP3 téléchargés depuis YouTube.
+Convertissez n'importe quelle playlist Spotify en fichiers **MP3 haute qualité** (320 kbps) stockés dans votre dossier Téléchargements, en une seule commande.
 
-## Fonctionnalités
+---
 
-- Récupère automatiquement toutes les pistes d'une playlist Spotify
-- Exporte les métadonnées (titre, artiste, album, durée) dans un fichier CSV
-- Recherche chaque chanson sur YouTube
-- Télécharge en MP3 haute qualité (320 kbps)
-- Sauvegarde dans le dossier `playlist convertie` du répertoire Téléchargements
+## ✨ Fonctionnalités
 
-## Prérequis
+- 📋 Récupération automatique des pistes depuis l'API Spotify
+- 📄 Export de la playlist au format **CSV**
+- 🔍 Recherche automatique de chaque chanson sur **YouTube**
+- ⬇️ Téléchargement en **MP3 320 kbps** via `yt-dlp`
+- 📁 Sauvegarde dans `~/Downloads/playlist convertie`
 
-- **Python 3.10+**
-- **FFmpeg** installé et accessible dans le PATH ([télécharger ici](https://ffmpeg.org/download.html))
-- Un compte développeur Spotify avec des **identifiants API** (Client ID + Client Secret)
+---
 
-### Obtenir les identifiants Spotify
+## 🛠️ Prérequis
 
-1. Aller sur [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-2. Créer une application
-3. Récupérer le **Client ID** et le **Client Secret**
+| Outil    | Version minimale | Installation                          |
+|----------|-----------------|---------------------------------------|
+| Python   | 3.11            | [python.org](https://python.org)      |
+| FFmpeg   | 4.x             | `brew install ffmpeg` / `apt install ffmpeg` |
 
-## Installation
+---
+
+## 🚀 Installation
 
 ```bash
+# 1. Cloner le dépôt
 git clone https://github.com/FxBam/playlist-to-mp3.git
 cd playlist-to-mp3
+
+# 2. Créer et activer un environnement virtuel (recommandé)
+python -m venv .venv
+source .venv/bin/activate  # Windows : .venv\Scripts\activate
+
+# 3. Installer les dépendances Python
 pip install -r requirements.txt
 ```
 
-## Configuration
+---
 
-Définir les variables d'environnement Spotify :
+## 🔑 Configuration de l'API Spotify
 
-### Windows (PowerShell)
+1. Connectez-vous sur [Spotify for Developers](https://developer.spotify.com/dashboard)
+2. Créez une application (**Create App**)
+3. Notez votre **Client ID** et votre **Client Secret**
+4. Créez un fichier `.env` à la racine du projet :
 
-```powershell
-$env:SPOTIPY_CLIENT_ID = "votre_client_id"
-$env:SPOTIPY_CLIENT_SECRET = "votre_client_secret"
+```env
+SPOTIPY_CLIENT_ID=votre_client_id_ici
+SPOTIPY_CLIENT_SECRET=votre_client_secret_ici
 ```
 
-### Linux / macOS
+> ⚠️ Le fichier `.env` est exclu du dépôt Git (`.gitignore`). Ne le partagez jamais.
+
+---
+
+## 📖 Utilisation
+
+### Conversion complète (CSV + MP3)
 
 ```bash
-export SPOTIPY_CLIENT_ID="votre_client_id"
-export SPOTIPY_CLIENT_SECRET="votre_client_secret"
+python main.py "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"
 ```
 
-Ou créer un fichier `.env` à la racine du projet :
-
-```
-SPOTIPY_CLIENT_ID=votre_client_id
-SPOTIPY_CLIENT_SECRET=votre_client_secret
-```
-
-## Utilisation
+### Avec dossier de destination personnalisé
 
 ```bash
-python playlist_to_mp3.py "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"
+python main.py "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M" --output ~/Musique/MaPlaylist
 ```
 
-Le programme va :
+### Export CSV uniquement (sans télécharger les MP3)
 
-1. Récupérer les pistes de la playlist via l'API Spotify
-2. Créer un dossier `playlist convertie` dans vos Téléchargements
-3. Exporter un fichier CSV avec les métadonnées
-4. Télécharger chaque chanson en MP3 320 kbps depuis YouTube
+```bash
+python main.py "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M" --csv-only
+```
 
-## Structure du projet
+### Toutes les options
+
+```
+usage: playlist-to-mp3 [-h] [--output DOSSIER] [--csv FICHIER_CSV] [--csv-only] playlist_url
+
+Convertit une playlist Spotify en fichiers MP3.
+
+arguments positionnels :
+  playlist_url          URL de la playlist Spotify
+
+options :
+  -h, --help            Affiche ce message d'aide
+  -o, --output DOSSIER  Dossier de destination (défaut : ~/Downloads/playlist convertie)
+  -c, --csv FICHIER_CSV Chemin du fichier CSV (défaut : <DOSSIER>/playlist.csv)
+  --csv-only            Exporte uniquement le CSV, sans télécharger les MP3
+```
+
+---
+
+## 📂 Structure du projet
 
 ```
 playlist-to-mp3/
-├── playlist_to_mp3.py   # Script principal
-├── requirements.txt     # Dépendances Python
-├── .gitignore
-└── README.md
+├── main.py               # Point d'entrée CLI
+├── spotify_exporter.py   # Récupération playlist Spotify + export CSV
+├── youtube_downloader.py # Recherche YouTube + téléchargement MP3
+├── requirements.txt      # Dépendances Python
+├── .env                  # Clés API Spotify (à créer, non versionné)
+└── README.md             # Ce fichier
 ```
 
-## Dépendances
+---
 
-| Paquet   | Rôle                                        |
-|----------|---------------------------------------------|
-| spotipy  | Accès à l'API Spotify                       |
-| yt-dlp   | Recherche YouTube et téléchargement audio   |
-| FFmpeg   | Conversion audio en MP3 (outil externe)     |
+## 📄 Format du CSV exporté
 
-## Licence
+| title         | artist        | album             | duration |
+|---------------|---------------|-------------------|----------|
+| Blinding Lights | The Weeknd  | After Hours       | 200      |
+| Shape of You  | Ed Sheeran    | ÷ (Divide)        | 234      |
 
-Ce projet est libre d'utilisation.
+Le champ `duration` est en secondes.
+
+---
+
+## ⚠️ Avertissements
+
+- Le téléchargement de contenu protégé par le droit d'auteur est soumis aux lois de votre pays et aux conditions d'utilisation de YouTube. Utilisez cet outil uniquement pour un usage personnel et légal.
+- Certaines pistes peuvent ne pas être trouvées sur YouTube si leur titre diffère entre les deux plateformes.
+- FFmpeg doit être installé et accessible dans le `PATH` système.
+
+---
+
+## 📝 Licence
+
+Ce projet est fourni à titre éducatif. L'auteur décline toute responsabilité quant à l'utilisation qui en est faite.
