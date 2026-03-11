@@ -7,6 +7,7 @@ et télécharger l'audio en MP3 haute qualité (320 kbps).
 
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import yt_dlp
 
@@ -19,22 +20,24 @@ def _sanitize_filename(name: str) -> str:
 class YoutubeDownloader:
     """Recherche et télécharge des pistes audio depuis YouTube en MP3."""
 
-    def __init__(self, output_dir: str) -> None:
+    def __init__(self, output_dir: str, max_workers: int = 4) -> None:
         """
         Initialise le téléchargeur.
 
         Args:
             output_dir: Répertoire de destination des fichiers MP3.
+            max_workers: Nombre de téléchargements simultanés.
         """
         self._output_dir = output_dir
+        self._max_workers = max_workers
         os.makedirs(output_dir, exist_ok=True)
 
     def _build_ydl_opts(self, output_template: str) -> dict:
         return {
             "format": "bestaudio/best",
             "outtmpl": output_template,
-            "quiet": False,
-            "no_warnings": False,
+            "quiet": True,
+            "no_warnings": True,
             "noplaylist": True,
             "postprocessors": [
                 {
@@ -73,7 +76,7 @@ class YoutubeDownloader:
 
     def download_tracks(self, tracks: list[dict]) -> list[str]:
         """
-        Télécharge une liste de pistes.
+        Télécharge une liste de pistes en parallèle.
 
         Args:
             tracks: Liste de dictionnaires avec les clés 'title' et 'artist'.
@@ -84,15 +87,23 @@ class YoutubeDownloader:
         downloaded: list[str] = []
         total = len(tracks)
 
-        for idx, track in enumerate(tracks, start=1):
-            title = track["title"]
-            artist = track["artist"]
-            print(f"\n[{idx}/{total}] Téléchargement de « {artist} - {title} »…")
-            path = self.download_track(title, artist)
-            if path:
-                print(f"  ✓ Sauvegardé : {path}")
-                downloaded.append(path)
-            else:
-                print(f"  ✗ Échec pour « {artist} - {title} »")
+        print(f"\n⚡ Téléchargement en parallèle ({self._max_workers} simultanés)…\n")
+
+        with ThreadPoolExecutor(max_workers=self._max_workers) as executor:
+            futures = {}
+            for idx, track in enumerate(tracks, start=1):
+                title = track["title"]
+                artist = track["artist"]
+                future = executor.submit(self.download_track, title, artist)
+                futures[future] = (idx, artist, title)
+
+            for future in as_completed(futures):
+                idx, artist, title = futures[future]
+                path = future.result()
+                if path:
+                    print(f"  [{idx}/{total}] ✓ {artist} - {title}")
+                    downloaded.append(path)
+                else:
+                    print(f"  [{idx}/{total}] ✗ {artist} - {title}")
 
         return downloaded
