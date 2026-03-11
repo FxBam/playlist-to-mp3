@@ -8,6 +8,7 @@ aucune clé API ni compte développeur requis.
 import csv
 import os
 import re
+import time
 
 import requests
 
@@ -69,8 +70,18 @@ class SpotifyExporter:
         params = {"limit": 100, "offset": 0}
 
         while url:
-            resp = requests.get(url, headers=self._headers, params=params, timeout=15)
-            resp.raise_for_status()
+            for attempt in range(5):
+                resp = requests.get(url, headers=self._headers, params=params, timeout=15)
+                if resp.status_code == 429:
+                    wait = int(resp.headers.get("Retry-After", 2 ** attempt))
+                    print(f"  ⏳ Rate limit Spotify, attente {wait}s…")
+                    time.sleep(wait)
+                    continue
+                resp.raise_for_status()
+                break
+            else:
+                raise RuntimeError("Trop de tentatives (429) sur l'API Spotify.")
+
             data = resp.json()
 
             for item in data.get("items", []):
