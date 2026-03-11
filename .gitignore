@@ -39,6 +39,7 @@ Thumbs.db
 # Downloaded files (not tracked)
 *.mp3
 *.mp4
+*.csv
 
 # CSV exports
 playlist_*.csv
