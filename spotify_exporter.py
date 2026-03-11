@@ -1,51 +1,46 @@
 """
 Module de récupération et d'exportation des playlists Spotify en CSV.
 
-Utilise l'API Spotify via la bibliothèque spotipy avec le flux Client Credentials.
-Les variables SPOTIPY_CLIENT_ID et SPOTIPY_CLIENT_SECRET doivent être définies
-dans un fichier .env ou dans les variables d'environnement.
+Utilise un token anonyme Spotify — aucune clé API ni compte développeur requis.
 """
 
 import csv
 import os
 import re
 
-import spotipy
-from dotenv import load_dotenv
-from spotipy.oauth2 import SpotifyClientCredentials
-
-load_dotenv()
+import requests
 
 
 def _extract_playlist_id(url: str) -> str:
     """Extrait l'identifiant de la playlist depuis une URL Spotify."""
-    # Formats acceptés :
-    #   https://open.spotify.com/playlist/<id>?si=...
-    #   spotify:playlist:<id>
     match = re.search(r"playlist[/:]([A-Za-z0-9]+)", url)
     if not match:
         raise ValueError(f"Impossible d'extraire l'ID de playlist depuis : {url}")
     return match.group(1)
 
 
+def _get_anonymous_token() -> str:
+    """Obtient un token d'accès Spotify anonyme (pas besoin de clés API)."""
+    resp = requests.get(
+        "https://open.spotify.com/get_access_token?reason=transport&productType=web_player",
+        headers={"User-Agent": "Mozilla/5.0"},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    token = resp.json().get("accessToken")
+    if not token:
+        raise RuntimeError("Impossible d'obtenir un token Spotify anonyme.")
+    return token
+
+
 class SpotifyExporter:
     """Récupère les pistes d'une playlist Spotify et les exporte en CSV."""
 
+    API_BASE = "https://api.spotify.com/v1"
+
     def __init__(self) -> None:
-        client_id = os.getenv("SPOTIPY_CLIENT_ID")
-        client_secret = os.getenv("SPOTIPY_CLIENT_SECRET")
-
-        if not client_id or not client_secret:
-            raise EnvironmentError(
-                "Les variables d'environnement SPOTIPY_CLIENT_ID et "
-                "SPOTIPY_CLIENT_SECRET doivent être définies."
-            )
-
-        auth_manager = SpotifyClientCredentials(
-            client_id=client_id,
-            client_secret=client_secret,
-        )
-        self._sp = spotipy.Spotify(auth_manager=auth_manager)
+        self._token = _get_anonymous_token()
+        self._headers = {"Authorization": f"Bearer {self._token}"}
 
     def get_tracks(self, playlist_url: str) -> list[dict]:
         """
@@ -53,43 +48,39 @@ class SpotifyExporter:
 
         Chaque piste est un dictionnaire avec les clés :
             - title   : titre de la chanson
-            - artist  : artiste principal
+            - artist  : artiste(s)
             - album   : titre de l'album
             - duration: durée en secondes
         """
         playlist_id = _extract_playlist_id(playlist_url)
         tracks: list[dict] = []
+        url = f"{self.API_BASE}/playlists/{playlist_id}/tracks"
+        params = {"limit": 100, "offset": 0}
 
-        results = self._sp.playlist_items(
-            playlist_id,
-            fields="items(track(name,artists,album(name),duration_ms)),next",
-            additional_types=["track"],
-        )
+        while url:
+            resp = requests.get(url, headers=self._headers, params=params, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
 
-        while results:
-            for item in results["items"]:
+            for item in data.get("items", []):
                 track = item.get("track")
-                if not track:
+                if not track or not track.get("name"):
                     continue
                 artists = ", ".join(a["name"] for a in track.get("artists", []))
-                tracks.append(
-                    {
-                        "title": track["name"],
-                        "artist": artists,
-                        "album": track["album"]["name"],
-                        "duration": round(track["duration_ms"] / 1000),
-                    }
-                )
-            results = self._sp.next(results) if results.get("next") else None
+                tracks.append({
+                    "title": track["name"],
+                    "artist": artists,
+                    "album": track["album"]["name"],
+                    "duration": round(track["duration_ms"] / 1000),
+                })
+
+            url = data.get("next")
+            params = {}  # next URL contient déjà les paramètres
 
         return tracks
 
     def export_to_csv(self, tracks: list[dict], csv_path: str) -> str:
-        """
-        Enregistre la liste de pistes dans un fichier CSV.
-
-        Retourne le chemin absolu du fichier créé.
-        """
+        """Enregistre la liste de pistes dans un fichier CSV."""
         parent = os.path.dirname(os.path.abspath(csv_path))
         if parent:
             os.makedirs(parent, exist_ok=True)

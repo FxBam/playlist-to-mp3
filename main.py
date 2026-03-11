@@ -37,6 +37,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "playlist_url",
+        nargs="?",
+        default=None,
         help="URL de la playlist Spotify (ex : https://open.spotify.com/playlist/…)",
     )
     parser.add_argument(
@@ -64,7 +66,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Exporte uniquement le CSV sans télécharger les MP3.",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+
+    if not args.playlist_url:
+        args.playlist_url = input("🎵 Entrez le lien de la playlist Spotify : ").strip()
+        if not args.playlist_url:
+            print("Erreur : aucun lien fourni.")
+            sys.exit(1)
+
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -84,19 +94,11 @@ def main(argv: list[str] | None = None) -> int:
     print("=" * 60)
 
     # ── Étape 1 : Récupération de la playlist Spotify ──────────────
-    print("\n[1/3] Connexion à l'API Spotify et récupération des pistes…")
+    print("\n[1/3] Récupération des pistes depuis Spotify…")
     try:
         exporter = SpotifyExporter()
-    except EnvironmentError as exc:
-        print(f"\n[ERREUR] {exc}")
-        print(
-            "\nConseils :\n"
-            "  1. Créez un fichier .env à la racine du projet avec :\n"
-            "       SPOTIPY_CLIENT_ID=<votre_client_id>\n"
-            "       SPOTIPY_CLIENT_SECRET=<votre_client_secret>\n"
-            "  2. Ou exportez ces variables dans votre terminal.\n"
-            "  Voir README.md pour les instructions détaillées."
-        )
+    except Exception as exc:
+        print(f"\n[ERREUR] Connexion à Spotify impossible : {exc}")
         return 1
 
     try:
