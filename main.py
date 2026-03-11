@@ -96,13 +96,8 @@ def main(argv: list[str] | None = None) -> int:
     # ── Étape 1 : Récupération de la playlist Spotify ──────────────
     print("\n[1/3] Récupération des pistes depuis Spotify…")
     try:
-        exporter = SpotifyExporter()
-    except Exception as exc:
-        print(f"\n[ERREUR] Connexion à Spotify impossible : {exc}")
-        return 1
-
-    try:
-        tracks = exporter.get_tracks(args.playlist_url)
+        exporter = SpotifyExporter(args.playlist_url)
+        tracks = exporter.get_tracks()
     except Exception as exc:
         print(f"\n[ERREUR] Récupération de la playlist impossible : {exc}")
         return 1

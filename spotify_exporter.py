@@ -1,7 +1,8 @@
 """
 Module de récupération et d'exportation des playlists Spotify en CSV.
 
-Utilise un token anonyme Spotify — aucune clé API ni compte développeur requis.
+Utilise un token anonyme extrait de la page embed Spotify —
+aucune clé API ni compte développeur requis.
 """
 
 import csv
@@ -9,6 +10,12 @@ import os
 import re
 
 import requests
+
+_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
 
 
 def _extract_playlist_id(url: str) -> str:
@@ -19,18 +26,18 @@ def _extract_playlist_id(url: str) -> str:
     return match.group(1)
 
 
-def _get_anonymous_token() -> str:
-    """Obtient un token d'accès Spotify anonyme (pas besoin de clés API)."""
-    resp = requests.get(
-        "https://open.spotify.com/get_access_token?reason=transport&productType=web_player",
-        headers={"User-Agent": "Mozilla/5.0"},
-        timeout=10,
-    )
+def _get_anonymous_token(playlist_id: str) -> str:
+    """Obtient un token Spotify anonyme via la page embed (pas de clé API)."""
+    embed_url = f"https://open.spotify.com/embed/playlist/{playlist_id}"
+    resp = requests.get(embed_url, headers={"User-Agent": _USER_AGENT}, timeout=15)
     resp.raise_for_status()
-    token = resp.json().get("accessToken")
-    if not token:
-        raise RuntimeError("Impossible d'obtenir un token Spotify anonyme.")
-    return token
+
+    match = re.search(r'"accessToken":"([^"]+)"', resp.text)
+    if not match:
+        raise RuntimeError(
+            "Impossible d'extraire le token depuis la page embed Spotify."
+        )
+    return match.group(1)
 
 
 class SpotifyExporter:
@@ -38,11 +45,15 @@ class SpotifyExporter:
 
     API_BASE = "https://api.spotify.com/v1"
 
-    def __init__(self) -> None:
-        self._token = _get_anonymous_token()
-        self._headers = {"Authorization": f"Bearer {self._token}"}
+    def __init__(self, playlist_url: str) -> None:
+        self._playlist_id = _extract_playlist_id(playlist_url)
+        self._token = _get_anonymous_token(self._playlist_id)
+        self._headers = {
+            "Authorization": f"Bearer {self._token}",
+            "User-Agent": _USER_AGENT,
+        }
 
-    def get_tracks(self, playlist_url: str) -> list[dict]:
+    def get_tracks(self) -> list[dict]:
         """
         Retourne la liste des pistes d'une playlist Spotify.
 
@@ -52,7 +63,7 @@ class SpotifyExporter:
             - album   : titre de l'album
             - duration: durée en secondes
         """
-        playlist_id = _extract_playlist_id(playlist_url)
+        playlist_id = self._playlist_id
         tracks: list[dict] = []
         url = f"{self.API_BASE}/playlists/{playlist_id}/tracks"
         params = {"limit": 100, "offset": 0}
