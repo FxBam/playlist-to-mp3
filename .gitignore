@@ -33,6 +33,9 @@ ENV/
 .DS_Store
 Thumbs.db
 
+# ffmpeg binaries
+ffmpeg/
+
 # Logs
 *.log
 
